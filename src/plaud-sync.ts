@@ -122,6 +122,7 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 	let updated = 0;
 	let skipped = 0;
 	let failed = 0;
+	let noAiContentSkipped = 0;
 	let checkpointCandidate = checkpointBefore;
 	const failures: PlaudSyncFailure[] = [];
 
@@ -131,6 +132,13 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 		try {
 			const detail = await input.api.getFileDetail(fileId);
 			const normalized = input.normalizeDetail(detail);
+
+			if (!normalized.aiContentMarkdown) {
+				skipped += 1;
+				noAiContentSkipped += 1;
+				continue;
+			}
+
 			const markdown = input.renderMarkdown(normalized);
 			const upsertResult = await input.upsertNote({
 				vault: input.vault,
@@ -166,7 +174,7 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 	}
 
 	let checkpointAfter = checkpointBefore;
-	if (failed === 0 && checkpointCandidate > checkpointBefore) {
+	if (failed === 0 && noAiContentSkipped === 0 && checkpointCandidate > checkpointBefore) {
 		await input.saveCheckpoint(checkpointCandidate);
 		checkpointAfter = checkpointCandidate;
 	}

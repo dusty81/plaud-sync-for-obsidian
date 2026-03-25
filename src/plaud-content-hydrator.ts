@@ -39,26 +39,6 @@ function hasTranscript(detail: Record<string, unknown>): boolean {
 	return false;
 }
 
-function hasSummary(detail: Record<string, unknown>): boolean {
-	if (typeof detail.summary === 'string' && detail.summary.trim()) {
-		return true;
-	}
-
-	const aiContent = detail.ai_content;
-	if (isRecord(aiContent)) {
-		const summary = firstString([
-			aiContent.summary,
-			aiContent.abstract,
-			aiContent.ai_content
-		]);
-		if (summary) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
 function pickContentLink(detail: Record<string, unknown>, dataType: string): string {
 	const contentList = Array.isArray(detail.content_list) ? detail.content_list : [];
 	for (const item of contentList) {
@@ -78,12 +58,91 @@ function pickContentLink(detail: Record<string, unknown>, dataType: string): str
 	return '';
 }
 
+interface ContentEntry {
+	dataType: string;
+	tabName: string;
+	title: string;
+	link: string;
+}
+
+const SUMMARY_DATA_TYPES = new Set(['auto_sum_note', 'sum_multi_note', 'consumer_note']);
+
+function pickAllSummaryLinks(detail: Record<string, unknown>): ContentEntry[] {
+	const contentList = Array.isArray(detail.content_list) ? detail.content_list : [];
+	const entries: ContentEntry[] = [];
+
+	for (const item of contentList) {
+		if (!isRecord(item)) {
+			continue;
+		}
+
+		const dataType = firstString([item.data_type, item.type, item.label, item.name]).toLowerCase();
+		if (!SUMMARY_DATA_TYPES.has(dataType)) {
+			continue;
+		}
+
+		const link = firstString([item.data_link, item.link, item.url]);
+		if (!link) {
+			continue;
+		}
+
+		entries.push({
+			dataType,
+			tabName: firstString([item.data_tab_name, item.data_title]) || 'Summary',
+			title: firstString([item.data_title]) || '',
+			link
+		});
+	}
+
+	return entries;
+}
+
 function parseMaybeJson(value: string): unknown {
 	try {
 		return JSON.parse(value);
 	} catch {
 		return value;
 	}
+}
+
+function extractMarkdownText(content: unknown): string {
+	if (typeof content === 'string') {
+		return content.trim();
+	}
+
+	if (isRecord(content)) {
+		const text = firstString([
+			content.ai_content,
+			content.content,
+			content.text,
+			content.summary,
+			content.markdown
+		]);
+		if (text) {
+			return text.trim();
+		}
+	}
+
+	return '';
+}
+
+function looksLikeMarkdown(text: string): boolean {
+	if (/^#{1,6}\s/m.test(text)) {
+		return true;
+	}
+
+	let indicators = 0;
+	if (/^- /m.test(text)) {
+		indicators += 1;
+	}
+	if (/\|.*\|/m.test(text)) {
+		indicators += 1;
+	}
+	if (/^>/m.test(text)) {
+		indicators += 1;
+	}
+
+	return indicators >= 2;
 }
 
 function applySummaryContent(detail: Record<string, unknown>, content: unknown): void {
@@ -158,16 +217,29 @@ export async function hydratePlaudDetailContent(
 ): Promise<Record<string, unknown>> {
 	const detail: Record<string, unknown> = {...rawDetail};
 
-	if (!hasSummary(detail)) {
-		const summaryLink = pickContentLink(detail, 'auto_sum_note');
-		if (summaryLink) {
-			try {
-				const content = await fetchContent(summaryLink);
+	const summaryEntries = pickAllSummaryLinks(detail);
+	const markdownSections: string[] = [];
+
+	for (const entry of summaryEntries) {
+		try {
+			const content = await fetchContent(entry.link);
+			const text = extractMarkdownText(content);
+			if (text && looksLikeMarkdown(text)) {
+				if (summaryEntries.length > 1 && entry.tabName) {
+					markdownSections.push(`---\n\n> **${entry.tabName}**\n\n${text}`);
+				} else {
+					markdownSections.push(text);
+				}
+			} else if (markdownSections.length === 0) {
 				applySummaryContent(detail, content);
-			} catch {
-				// best-effort enrichment only
 			}
+		} catch {
+			// best-effort enrichment only
 		}
+	}
+
+	if (markdownSections.length > 0) {
+		detail.ai_content_markdown = markdownSections.join('\n\n');
 	}
 
 	if (!hasTranscript(detail)) {

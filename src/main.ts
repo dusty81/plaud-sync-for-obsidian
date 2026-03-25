@@ -213,11 +213,6 @@ export default class PlaudSyncPlugin extends Plugin {
 			throw new Error(`Signed content fetch failed with HTTP ${response.status}.`);
 		}
 
-		const parsedJson: unknown = (response as {json?: unknown}).json;
-		if (parsedJson !== null && parsedJson !== undefined) {
-			return parsedJson;
-		}
-
 		const text = typeof response.text === 'string' ? response.text.trim() : '';
 		if (!text) {
 			return '';

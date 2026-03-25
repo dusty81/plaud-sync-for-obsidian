@@ -17,6 +17,20 @@ const sampleDetail = {
   summary: 'Summary text',
   highlights: ['Highlight one', 'Highlight two'],
   transcript: 'Speaker A: Hello',
+  aiContentMarkdown: '',
+  raw: {}
+};
+
+const samplePassthroughDetail = {
+  id: 'pt',
+  fileId: 'f_pt',
+  title: 'Sprint planning',
+  startAtMs: 1730678400000,
+  durationMs: 1800000,
+  summary: '',
+  highlights: [],
+  transcript: 'Alice: Let us begin\nBob: Sounds good',
+  aiContentMarkdown: '## Key Points\n- Sprint goal defined\n\n## Action Items\n- Alice to write spec',
   raw: {}
 };
 
@@ -82,4 +96,53 @@ test('escapes quotes in title frontmatter while preserving heading text', () => 
 
   assert.match(markdown, /^title: "Exec \\"Q4\\" Sync"$/m);
   assert.match(markdown, /^# Exec "Q4" Sync$/m);
+});
+
+test('passthrough mode renders AI content verbatim with collapsible transcript', () => {
+  const markdown = renderPlaudMarkdown(samplePassthroughDetail);
+
+  // Frontmatter present
+  assert.match(markdown, /^---/m);
+  assert.match(markdown, /^source: plaud$/m);
+  assert.match(markdown, /^file_id: f_pt$/m);
+
+  // Title heading
+  assert.match(markdown, /^# Sprint planning$/m);
+
+  // AI content passed through verbatim
+  assert.match(markdown, /^## Key Points$/m);
+  assert.match(markdown, /^- Sprint goal defined$/m);
+  assert.match(markdown, /^## Action Items$/m);
+  assert.match(markdown, /^- Alice to write spec$/m);
+
+  // Transcript in collapsible callout
+  assert.match(markdown, /> \[!note\]- Transcript/);
+  assert.match(markdown, /> Alice: Let us begin/);
+  assert.match(markdown, /> Bob: Sounds good/);
+
+  // Should NOT have the old-style ## Summary or ## Highlights sections
+  assert.doesNotMatch(markdown, /## Summary/);
+  assert.doesNotMatch(markdown, /## Highlights/);
+});
+
+test('passthrough mode omits callout when transcript is empty', () => {
+  const markdown = renderPlaudMarkdown({
+    ...samplePassthroughDetail,
+    transcript: ''
+  });
+
+  assert.match(markdown, /^## Key Points$/m);
+  assert.doesNotMatch(markdown, /\[!note\]- Transcript/);
+});
+
+test('falls back to old template when aiContentMarkdown is empty', () => {
+  const markdown = renderPlaudMarkdown({
+    ...sampleDetail,
+    aiContentMarkdown: ''
+  });
+
+  assert.match(markdown, /## Summary/);
+  assert.match(markdown, /## Highlights/);
+  assert.match(markdown, /## Transcript/);
+  assert.doesNotMatch(markdown, /\[!note\]- Transcript/);
 });

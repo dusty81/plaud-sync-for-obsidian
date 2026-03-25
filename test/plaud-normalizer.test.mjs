@@ -137,3 +137,46 @@ test('gracefully handles malformed payloads', () => {
   assert.deepEqual(normalized.highlights, []);
   assert.equal(normalized.transcript, '');
 });
+
+test('extracts aiContentMarkdown from detail when present', () => {
+  const normalized = normalizePlaudDetail({
+    id: 'ai-md',
+    file_id: 'f_ai_md',
+    file_name: 'Team standup',
+    start_time: 1730000000000,
+    duration: 300000,
+    ai_content_markdown: '## Key Points\n- Point one\n\n## Action Items\n- Do thing'
+  });
+
+  assert.equal(normalized.aiContentMarkdown, '## Key Points\n- Point one\n\n## Action Items\n- Do thing');
+  assert.equal(normalized.title, 'Team standup');
+});
+
+test('aiContentMarkdown is empty string when not present in detail', () => {
+  const normalized = normalizePlaudDetail({
+    id: 'no-ai',
+    file_id: 'f_no_ai',
+    file_name: 'Old recording'
+  });
+
+  assert.equal(normalized.aiContentMarkdown, '');
+});
+
+test('existing fields are still populated when aiContentMarkdown is present', () => {
+  const normalized = normalizePlaudDetail({
+    id: 'both',
+    file_id: 'f_both',
+    file_name: 'Meeting',
+    start_time: 1730000000000,
+    duration: 600000,
+    ai_content_markdown: '## Summary\n- Key point',
+    summary: 'Inline summary',
+    trans_result: {
+      paragraphs: [{speaker: 'A', text: 'Hello'}]
+    }
+  });
+
+  assert.equal(normalized.aiContentMarkdown, '## Summary\n- Key point');
+  assert.equal(normalized.summary, 'Inline summary');
+  assert.match(normalized.transcript, /A: Hello/);
+});

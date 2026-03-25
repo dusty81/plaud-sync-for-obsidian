@@ -35,10 +35,8 @@ export function renderPlaudMarkdown(detail: NormalizedPlaudDetail): string {
 	const title = normalizeTitle(detail.title);
 	const date = formatDate(detail.startAtMs);
 	const duration = formatDuration(detail.durationMs);
-	const summary = detail.summary.trim() || 'No summary available.';
-	const transcript = detail.transcript.trim() || 'No transcript available.';
 
-	return [
+	const frontmatter = [
 		'---',
 		'source: plaud',
 		'type: recording',
@@ -46,7 +44,27 @@ export function renderPlaudMarkdown(detail: NormalizedPlaudDetail): string {
 		`title: "${escapeFrontmatterValue(title)}"`,
 		`date: ${date}`,
 		`duration: ${duration}`,
-		'---',
+		'---'
+	].join('\n');
+
+	if (detail.aiContentMarkdown) {
+		const parts = [frontmatter, '', `# ${title}`, '', detail.aiContentMarkdown];
+
+		const transcript = detail.transcript.trim();
+		if (transcript) {
+			const calloutBody = transcript.split('\n').map((line) => `> ${line}`).join('\n');
+			parts.push('', '> [!note]- Transcript', calloutBody);
+		}
+
+		parts.push('');
+		return parts.join('\n');
+	}
+
+	const summary = detail.summary.trim() || 'No summary available.';
+	const transcript = detail.transcript.trim() || 'No transcript available.';
+
+	return [
+		frontmatter,
 		'',
 		`# ${title}`,
 		'',

@@ -50,6 +50,7 @@ test('filters trashed recordings and applies incremental selection from lastSync
       summary: '',
       highlights: [],
       transcript: '',
+      aiContentMarkdown: '## Content',
       raw
     }),
     renderMarkdown: () => '---\nfile_id: keep\n---',
@@ -101,6 +102,7 @@ test('returns created/updated/skipped/failed summary counts and does not checkpo
       summary: '',
       highlights: [],
       transcript: '',
+      aiContentMarkdown: '## Content',
       raw
     }),
     renderMarkdown: () => '---\nfile_id: x\n---',
@@ -155,6 +157,7 @@ test('advances lastSyncAtMs only after successful batch completion', async () =>
       summary: '',
       highlights: [],
       transcript: '',
+      aiContentMarkdown: '## Content',
       raw
     }),
     renderMarkdown: () => '---\nfile_id: x\n---',
@@ -164,4 +167,91 @@ test('advances lastSyncAtMs only after successful batch completion', async () =>
   assert.equal(summary.failed, 0);
   assert.deepEqual(checkpointCalls, [1500]);
   assert.equal(summary.lastSyncAtMsAfter, 1500);
+});
+
+test('skips files where aiContentMarkdown is empty after normalization', async () => {
+  const upsertCalls = [];
+
+  const summary = await runPlaudSync({
+    api: {
+      async listFiles() {
+        return [
+          {id: 'has_ai', start_time: 200, is_trash: false},
+          {id: 'no_ai', start_time: 300, is_trash: false}
+        ];
+      },
+      async getFileDetail(id) {
+        return {id, file_id: id, file_name: id, start_time: id === 'has_ai' ? 200 : 300, duration: 60000};
+      }
+    },
+    vault: {},
+    settings: baseSettings({lastSyncAtMs: 100}),
+    saveCheckpoint: async () => {},
+    normalizeDetail: (raw) => ({
+      id: raw.id,
+      fileId: raw.file_id,
+      title: raw.file_name,
+      startAtMs: raw.start_time,
+      durationMs: raw.duration,
+      summary: '',
+      highlights: [],
+      transcript: '',
+      aiContentMarkdown: raw.id === 'has_ai' ? '## Summary\n- Point' : '',
+      raw
+    }),
+    renderMarkdown: () => '---\nfile_id: x\n---',
+    upsertNote: async (input) => {
+      upsertCalls.push(input.fileId);
+      return {action: 'created', path: `Plaud/${input.fileId}.md`};
+    }
+  });
+
+  assert.deepEqual(upsertCalls, ['has_ai']);
+  assert.equal(summary.created, 1);
+  assert.equal(summary.skipped, 1);
+  assert.equal(summary.failed, 0);
+});
+
+test('checkpoint does not advance when any file was skipped for missing AI content', async () => {
+  const checkpointCalls = [];
+
+  const summary = await runPlaudSync({
+    api: {
+      async listFiles() {
+        return [
+          {id: 'a', start_time: 200, is_trash: false},
+          {id: 'b_no_ai', start_time: 300, is_trash: false},
+          {id: 'c', start_time: 400, is_trash: false}
+        ];
+      },
+      async getFileDetail(id) {
+        return {id, file_id: id, file_name: id, start_time: ({a: 200, b_no_ai: 300, c: 400})[id], duration: 60000};
+      }
+    },
+    vault: {},
+    settings: baseSettings({lastSyncAtMs: 100}),
+    saveCheckpoint: async (value) => {
+      checkpointCalls.push(value);
+    },
+    normalizeDetail: (raw) => ({
+      id: raw.id,
+      fileId: raw.file_id,
+      title: raw.file_name,
+      startAtMs: raw.start_time,
+      durationMs: raw.duration,
+      summary: '',
+      highlights: [],
+      transcript: '',
+      aiContentMarkdown: raw.id === 'b_no_ai' ? '' : '## Content\n- Data',
+      raw
+    }),
+    renderMarkdown: () => '---\nfile_id: x\n---',
+    upsertNote: async () => ({action: 'created', path: 'Plaud/x.md'})
+  });
+
+  assert.equal(summary.created, 2);
+  assert.equal(summary.skipped, 1);
+  assert.equal(summary.failed, 0);
+  assert.deepEqual(checkpointCalls, []);
+  assert.equal(summary.lastSyncAtMsAfter, 100);
 });

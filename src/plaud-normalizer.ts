@@ -7,6 +7,7 @@ export interface NormalizedPlaudDetail {
 	summary: string;
 	highlights: string[];
 	transcript: string;
+	aiContentMarkdown: string;
 	raw: Record<string, unknown>;
 }
 
@@ -240,6 +241,7 @@ export function normalizePlaudDetail(raw: unknown): NormalizedPlaudDetail {
 		summary: extractSummary(detail),
 		highlights: extractHighlights(detail),
 		transcript: extractTranscript(detail),
+		aiContentMarkdown: asString(detail.ai_content_markdown),
 		raw: detail
 	};
 }
