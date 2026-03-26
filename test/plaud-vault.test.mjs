@@ -43,10 +43,66 @@ test('buildPlaudFilename is deterministic and slug-safe', () => {
   const filename = buildPlaudFilename({
     filenamePattern: 'plaud-{date}-{title}',
     date: '2024-11-04',
-    title: 'Weekly Sync: Team / Product'
+    title: 'Weekly Sync: Team / Product',
+    expandTitleDate: false
   });
 
   assert.equal(filename, 'plaud-2024-11-04-weekly-sync-team-product.md');
+});
+
+test('buildPlaudFilename expands MM-DD prefix to full YYYY-MM-DD', () => {
+  const filename = buildPlaudFilename({
+    filenamePattern: '{title}',
+    date: '2025-12-23',
+    title: '12-23 Daily Meeting IT Infrastructure Stand-Up',
+    expandTitleDate: true
+  });
+
+  assert.equal(filename, '2025-12-23-daily-meeting-it-infrastructure-stand-up.md');
+});
+
+test('buildPlaudFilename expands MM-DD prefix separated by hyphen', () => {
+  const filename = buildPlaudFilename({
+    filenamePattern: '{title}',
+    date: '2025-12-23',
+    title: '12-23-Daily Meeting IT Infrastructure Stand-Up',
+    expandTitleDate: true
+  });
+
+  assert.equal(filename, '2025-12-23-daily-meeting-it-infrastructure-stand-up.md');
+});
+
+test('buildPlaudFilename leaves title with full YYYY-MM-DD prefix unchanged', () => {
+  const filename = buildPlaudFilename({
+    filenamePattern: '{title}',
+    date: '2025-12-23',
+    title: '2025-12-23 Daily Meeting',
+    expandTitleDate: true
+  });
+
+  assert.equal(filename, '2025-12-23-daily-meeting.md');
+});
+
+test('buildPlaudFilename does not expand when expandTitleDate is false', () => {
+  const filename = buildPlaudFilename({
+    filenamePattern: '{title}',
+    date: '2025-12-23',
+    title: '12-23 Daily Meeting',
+    expandTitleDate: false
+  });
+
+  assert.equal(filename, '12-23-daily-meeting.md');
+});
+
+test('buildPlaudFilename with {date} and expandTitleDate avoids double date', () => {
+  const filename = buildPlaudFilename({
+    filenamePattern: '{date}-{title}',
+    date: '2025-12-23',
+    title: '12-23 Daily Meeting',
+    expandTitleDate: true
+  });
+
+  assert.equal(filename, '2025-12-23-2025-12-23-daily-meeting.md');
 });
 
 test('creates sync folder and new note when no existing file_id match', async () => {
@@ -56,6 +112,7 @@ test('creates sync folder and new note when no existing file_id match', async ()
     vault,
     syncFolder: 'Plaud',
     filenamePattern: 'plaud-{date}-{title}',
+    expandTitleDate: false,
     updateExisting: true,
     fileId: 'f_001',
     title: 'First Note',
@@ -78,6 +135,7 @@ test('matches existing note by frontmatter file_id and updates in place', async 
     vault,
     syncFolder: 'Plaud',
     filenamePattern: 'plaud-{date}-{title}',
+    expandTitleDate: false,
     updateExisting: true,
     fileId: 'f_abc',
     title: 'Updated title',
@@ -100,6 +158,7 @@ test('matches existing note when frontmatter file_id is quoted', async () => {
     vault,
     syncFolder: 'Plaud',
     filenamePattern: 'plaud-{date}-{title}',
+    expandTitleDate: false,
     updateExisting: true,
     fileId: 'f_quoted',
     title: 'Quoted match',
@@ -122,6 +181,7 @@ test('skips update when updateExisting=false but still resolves by file_id', asy
     vault,
     syncFolder: 'Plaud',
     filenamePattern: 'plaud-{date}-{title}',
+    expandTitleDate: false,
     updateExisting: false,
     fileId: 'f_skip',
     title: 'Ignored title',
@@ -145,6 +205,7 @@ test('applies collision-safe filename fallback for new notes', async () => {
     vault,
     syncFolder: 'Plaud',
     filenamePattern: 'plaud-{date}-{title}',
+    expandTitleDate: false,
     updateExisting: true,
     fileId: 'f_new',
     title: 'First Note',

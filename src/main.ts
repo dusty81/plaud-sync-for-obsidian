@@ -159,6 +159,7 @@ export default class PlaudSyncPlugin extends Plugin {
 			settings: {
 				syncFolder: this.settings.syncFolder,
 				filenamePattern: this.settings.filenamePattern,
+				expandTitleDate: this.settings.expandTitleDate,
 				updateExisting: this.settings.updateExisting,
 				lastSyncAtMs: this.settings.lastSyncAtMs
 			},

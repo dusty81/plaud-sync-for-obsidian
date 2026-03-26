@@ -18,6 +18,7 @@ const mainSource = fs.readFileSync(path.join(root, 'src/main.ts'), 'utf8');
 test('default settings expose full Plaud sync schema', () => {
   assert.deepEqual(Object.keys(DEFAULT_SETTINGS).sort(), [
     'apiDomain',
+    'expandTitleDate',
     'filenamePattern',
     'lastSyncAtMs',
     'syncFolder',
@@ -29,7 +30,8 @@ test('default settings expose full Plaud sync schema', () => {
   assert.equal(DEFAULT_SETTINGS.syncFolder, 'Plaud');
   assert.equal(DEFAULT_SETTINGS.syncOnStartup, true);
   assert.equal(DEFAULT_SETTINGS.updateExisting, true);
-  assert.equal(DEFAULT_SETTINGS.filenamePattern, 'plaud-{date}-{title}');
+  assert.equal(DEFAULT_SETTINGS.filenamePattern, '{title}');
+  assert.equal(DEFAULT_SETTINGS.expandTitleDate, true);
   assert.equal(DEFAULT_SETTINGS.lastSyncAtMs, 0);
 });
 

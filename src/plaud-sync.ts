@@ -5,6 +5,7 @@ import type {PlaudVaultAdapter, UpsertPlaudNoteResult} from './plaud-vault';
 export interface PlaudSyncSettings {
 	syncFolder: string;
 	filenamePattern: string;
+	expandTitleDate: boolean;
 	updateExisting: boolean;
 	lastSyncAtMs: number;
 }
@@ -37,6 +38,7 @@ export interface RunPlaudSyncInput {
 		vault: PlaudVaultAdapter;
 		syncFolder: string;
 		filenamePattern: string;
+		expandTitleDate: boolean;
 		updateExisting: boolean;
 		fileId: string;
 		title: string;
@@ -144,6 +146,7 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 				vault: input.vault,
 				syncFolder: input.settings.syncFolder,
 				filenamePattern: input.settings.filenamePattern,
+				expandTitleDate: input.settings.expandTitleDate,
 				updateExisting: input.settings.updateExisting,
 				fileId: normalized.fileId,
 				title: normalized.title,

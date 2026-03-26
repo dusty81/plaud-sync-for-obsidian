@@ -12,6 +12,7 @@ function baseSettings(overrides = {}) {
   return {
     syncFolder: 'Plaud',
     filenamePattern: 'plaud-{date}-{title}',
+    expandTitleDate: false,
     updateExisting: true,
     lastSyncAtMs: 0,
     ...overrides

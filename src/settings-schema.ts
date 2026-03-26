@@ -4,6 +4,7 @@ export interface PlaudPluginSettings {
 	syncOnStartup: boolean;
 	updateExisting: boolean;
 	filenamePattern: string;
+	expandTitleDate: boolean;
 	lastSyncAtMs: number;
 }
 
@@ -12,7 +13,8 @@ export const DEFAULT_SETTINGS: PlaudPluginSettings = {
 	syncFolder: 'Plaud',
 	syncOnStartup: true,
 	updateExisting: true,
-	filenamePattern: 'plaud-{date}-{title}',
+	filenamePattern: '{title}',
+	expandTitleDate: true,
 	lastSyncAtMs: 0
 };
 
@@ -50,6 +52,7 @@ export function normalizeSettings(raw: unknown): PlaudPluginSettings {
 		syncOnStartup: readBoolean(persisted.syncOnStartup, DEFAULT_SETTINGS.syncOnStartup),
 		updateExisting: readBoolean(persisted.updateExisting, DEFAULT_SETTINGS.updateExisting),
 		filenamePattern: readString(persisted.filenamePattern, DEFAULT_SETTINGS.filenamePattern),
+		expandTitleDate: readBoolean(persisted.expandTitleDate, DEFAULT_SETTINGS.expandTitleDate),
 		lastSyncAtMs: readTimestampMs(persisted.lastSyncAtMs, DEFAULT_SETTINGS.lastSyncAtMs)
 	};
 }

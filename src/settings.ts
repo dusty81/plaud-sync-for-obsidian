@@ -106,6 +106,16 @@ export class PlaudSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('Expand title date')
+			.setDesc('Replace MM-DD prefix in Plaud titles with full YYYY-MM-DD from recording date.')
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.expandTitleDate)
+				.onChange(async (value) => {
+					this.plugin.settings.expandTitleDate = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Last sync checkpoint')
 			.setDesc('Unix timestamp in milliseconds for incremental sync state.')
 			.addText((text) => text

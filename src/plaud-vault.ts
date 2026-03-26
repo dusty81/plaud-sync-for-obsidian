@@ -10,12 +10,14 @@ export interface BuildFilenameInput {
 	filenamePattern: string;
 	date: string;
 	title: string;
+	expandTitleDate: boolean;
 }
 
 export interface UpsertPlaudNoteInput {
 	vault: PlaudVaultAdapter;
 	syncFolder: string;
 	filenamePattern: string;
+	expandTitleDate: boolean;
 	updateExisting: boolean;
 	fileId: string;
 	title: string;
@@ -97,10 +99,19 @@ function withCollisionSuffix(fileName: string, suffix: number): string {
 	return `${base}-${suffix}${ext}`;
 }
 
+function expandLeadingDatePrefix(title: string, fullDate: string): string {
+	if (/^\d{4}-\d{2}-\d{2}[\s\-_]/.test(title)) {
+		return title;
+	}
+
+	return title.replace(/^\d{2}-\d{2}([\s\-_])/, `${fullDate}$1`);
+}
+
 export function buildPlaudFilename(input: BuildFilenameInput): string {
-	const pattern = input.filenamePattern.trim() || 'plaud-{date}-{title}';
+	const pattern = input.filenamePattern.trim() || '{title}';
+	const title = input.expandTitleDate ? expandLeadingDatePrefix(input.title, input.date) : input.title;
 	const replacedDate = pattern.replace(/\{date\}/g, input.date);
-	const filled = replacedDate.replace(/\{title\}/g, slugify(input.title));
+	const filled = replacedDate.replace(/\{title\}/g, slugify(title));
 	const filename = slugify(filled).replace(/^-+|-+$/g, '');
 	return `${filename || 'plaud-recording'}.md`;
 }
@@ -142,7 +153,8 @@ export async function upsertPlaudNote(input: UpsertPlaudNoteInput): Promise<Upse
 	const initialFileName = buildPlaudFilename({
 		filenamePattern: input.filenamePattern,
 		date: input.date,
-		title: input.title
+		title: input.title,
+		expandTitleDate: input.expandTitleDate
 	});
 	const path = resolveAvailablePath(folder, initialFileName, existingSet);
 
