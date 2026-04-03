@@ -1,8 +1,8 @@
-/*
+@keyframes plaud-spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
+.plaud-sync-spinning .svg-icon {
+	animation: plaud-spin 1s linear infinite;
+}

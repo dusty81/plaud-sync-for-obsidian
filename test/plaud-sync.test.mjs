@@ -27,18 +27,18 @@ test('filters trashed recordings and applies incremental selection from lastSync
     api: {
       async listFiles() {
         return [
-          {id: 'old', start_time: 10, is_trash: false},
-          {id: 'trash', start_time: 500, is_trash: true},
-          {id: 'keep', start_time: 200, is_trash: false}
+          {id: 'old', start_time: 1700000000000, is_trash: false},
+          {id: 'trash', start_time: 1700000500000, is_trash: true},
+          {id: 'keep', start_time: 1700000200000, is_trash: false}
         ];
       },
       async getFileDetail(id) {
         detailCalls.push(id);
-        return {id, file_id: id, file_name: id, start_time: id === 'keep' ? 200 : 10, duration: 60000};
+        return {id, file_id: id, file_name: id, start_time: id === 'keep' ? 1700000200000 : 1700000000000, duration: 60000};
       }
     },
     vault: {},
-    settings: baseSettings({lastSyncAtMs: 100}),
+    settings: baseSettings({lastSyncAtMs: 1700000100000}),
     saveCheckpoint: async (value) => {
       checkpointCalls.push(value);
     },
@@ -55,7 +55,10 @@ test('filters trashed recordings and applies incremental selection from lastSync
       raw
     }),
     renderMarkdown: () => '---\nfile_id: keep\n---',
-    upsertNote: async () => ({action: 'created', path: 'Plaud/keep.md'})
+    upsertNote: async () => ({action: 'created', path: 'Plaud/keep.md'}),
+    fetchBinary: async () => new ArrayBuffer(0),
+    buildSignedUrlMap: () => [],
+    resolveImages: async (input) => ({markdown: input.markdown, downloaded: 0})
   });
 
   assert.deepEqual(detailCalls, ['keep']);
@@ -64,8 +67,8 @@ test('filters trashed recordings and applies incremental selection from lastSync
   assert.equal(summary.skipped, 0);
   assert.equal(summary.failed, 0);
   assert.equal(summary.selected, 1);
-  assert.deepEqual(checkpointCalls, [200]);
-  assert.equal(summary.lastSyncAtMsAfter, 200);
+  assert.deepEqual(checkpointCalls, [1700000200000]);
+  assert.equal(summary.lastSyncAtMsAfter, 1700000200000);
 });
 
 test('returns created/updated/skipped/failed summary counts and does not checkpoint on failures', async () => {
@@ -75,10 +78,10 @@ test('returns created/updated/skipped/failed summary counts and does not checkpo
     api: {
       async listFiles() {
         return [
-          {id: 'create', start_time: 101, is_trash: false},
-          {id: 'update', start_time: 102, is_trash: false},
-          {id: 'skip', start_time: 103, is_trash: false},
-          {id: 'fail', start_time: 104, is_trash: false}
+          {id: 'create', start_time: 1700000101000, is_trash: false},
+          {id: 'update', start_time: 1700000102000, is_trash: false},
+          {id: 'skip', start_time: 1700000103000, is_trash: false},
+          {id: 'fail', start_time: 1700000104000, is_trash: false}
         ];
       },
       async getFileDetail(id) {
@@ -86,11 +89,11 @@ test('returns created/updated/skipped/failed summary counts and does not checkpo
           throw new Error('detail failed');
         }
 
-        return {id, file_id: id, file_name: id, start_time: 100 + id.length, duration: 60000};
+        return {id, file_id: id, file_name: id, start_time: 1700000100000 + id.length * 1000, duration: 60000};
       }
     },
     vault: {},
-    settings: baseSettings({lastSyncAtMs: 100}),
+    settings: baseSettings({lastSyncAtMs: 1700000100000}),
     saveCheckpoint: async (value) => {
       checkpointCalls.push(value);
     },
@@ -115,14 +118,17 @@ test('returns created/updated/skipped/failed summary counts and does not checkpo
         return {action: 'updated', path: 'Plaud/update.md'};
       }
       return {action: 'skipped', path: 'Plaud/skip.md'};
-    }
+    },
+    fetchBinary: async () => new ArrayBuffer(0),
+    buildSignedUrlMap: () => [],
+    resolveImages: async (input) => ({markdown: input.markdown, downloaded: 0})
   });
 
   assert.equal(summary.created, 1);
   assert.equal(summary.updated, 1);
   assert.equal(summary.skipped, 1);
   assert.equal(summary.failed, 1);
-  assert.equal(summary.lastSyncAtMsAfter, 100);
+  assert.equal(summary.lastSyncAtMsAfter, 1700000100000);
   assert.deepEqual(checkpointCalls, []);
   assert.equal(summary.failures.length, 1);
   assert.equal(summary.failures[0].fileId, 'fail');
@@ -136,16 +142,16 @@ test('advances lastSyncAtMs only after successful batch completion', async () =>
     api: {
       async listFiles() {
         return [
-          {id: 'a', start_time: 1000, is_trash: false},
-          {id: 'b', start_time: 1500, is_trash: false}
+          {id: 'a', start_time: 1700000001000, is_trash: false},
+          {id: 'b', start_time: 1700000001500, is_trash: false}
         ];
       },
       async getFileDetail(id) {
-        return {id, file_id: id, file_name: id, start_time: id === 'a' ? 1000 : 1500, duration: 60000};
+        return {id, file_id: id, file_name: id, start_time: id === 'a' ? 1700000001000 : 1700000001500, duration: 60000};
       }
     },
     vault: {},
-    settings: baseSettings({lastSyncAtMs: 500}),
+    settings: baseSettings({lastSyncAtMs: 1700000000500}),
     saveCheckpoint: async (value) => {
       checkpointCalls.push(value);
     },
@@ -162,12 +168,15 @@ test('advances lastSyncAtMs only after successful batch completion', async () =>
       raw
     }),
     renderMarkdown: () => '---\nfile_id: x\n---',
-    upsertNote: async (input) => ({action: input.fileId === 'a' ? 'updated' : 'created', path: 'Plaud/x.md'})
+    upsertNote: async (input) => ({action: input.fileId === 'a' ? 'updated' : 'created', path: 'Plaud/x.md'}),
+    fetchBinary: async () => new ArrayBuffer(0),
+    buildSignedUrlMap: () => [],
+    resolveImages: async (input) => ({markdown: input.markdown, downloaded: 0})
   });
 
   assert.equal(summary.failed, 0);
-  assert.deepEqual(checkpointCalls, [1500]);
-  assert.equal(summary.lastSyncAtMsAfter, 1500);
+  assert.deepEqual(checkpointCalls, [1700000001500]);
+  assert.equal(summary.lastSyncAtMsAfter, 1700000001500);
 });
 
 test('skips files where aiContentMarkdown is empty after normalization', async () => {
@@ -177,16 +186,16 @@ test('skips files where aiContentMarkdown is empty after normalization', async (
     api: {
       async listFiles() {
         return [
-          {id: 'has_ai', start_time: 200, is_trash: false},
-          {id: 'no_ai', start_time: 300, is_trash: false}
+          {id: 'has_ai', start_time: 1700000200000, is_trash: false},
+          {id: 'no_ai', start_time: 1700000300000, is_trash: false}
         ];
       },
       async getFileDetail(id) {
-        return {id, file_id: id, file_name: id, start_time: id === 'has_ai' ? 200 : 300, duration: 60000};
+        return {id, file_id: id, file_name: id, start_time: id === 'has_ai' ? 1700000200000 : 1700000300000, duration: 60000};
       }
     },
     vault: {},
-    settings: baseSettings({lastSyncAtMs: 100}),
+    settings: baseSettings({lastSyncAtMs: 1700000100000}),
     saveCheckpoint: async () => {},
     normalizeDetail: (raw) => ({
       id: raw.id,
@@ -204,7 +213,10 @@ test('skips files where aiContentMarkdown is empty after normalization', async (
     upsertNote: async (input) => {
       upsertCalls.push(input.fileId);
       return {action: 'created', path: `Plaud/${input.fileId}.md`};
-    }
+    },
+    fetchBinary: async () => new ArrayBuffer(0),
+    buildSignedUrlMap: () => [],
+    resolveImages: async (input) => ({markdown: input.markdown, downloaded: 0})
   });
 
   assert.deepEqual(upsertCalls, ['has_ai']);
@@ -213,24 +225,24 @@ test('skips files where aiContentMarkdown is empty after normalization', async (
   assert.equal(summary.failed, 0);
 });
 
-test('checkpoint does not advance when any file was skipped for missing AI content', async () => {
+test('checkpoint advances past files skipped for missing AI content', async () => {
   const checkpointCalls = [];
 
   const summary = await runPlaudSync({
     api: {
       async listFiles() {
         return [
-          {id: 'a', start_time: 200, is_trash: false},
-          {id: 'b_no_ai', start_time: 300, is_trash: false},
-          {id: 'c', start_time: 400, is_trash: false}
+          {id: 'a', start_time: 1700000200000, is_trash: false},
+          {id: 'b_no_ai', start_time: 1700000300000, is_trash: false},
+          {id: 'c', start_time: 1700000400000, is_trash: false}
         ];
       },
       async getFileDetail(id) {
-        return {id, file_id: id, file_name: id, start_time: ({a: 200, b_no_ai: 300, c: 400})[id], duration: 60000};
+        return {id, file_id: id, file_name: id, start_time: ({a: 1700000200000, b_no_ai: 1700000300000, c: 1700000400000})[id], duration: 60000};
       }
     },
     vault: {},
-    settings: baseSettings({lastSyncAtMs: 100}),
+    settings: baseSettings({lastSyncAtMs: 1700000100000}),
     saveCheckpoint: async (value) => {
       checkpointCalls.push(value);
     },
@@ -247,12 +259,61 @@ test('checkpoint does not advance when any file was skipped for missing AI conte
       raw
     }),
     renderMarkdown: () => '---\nfile_id: x\n---',
-    upsertNote: async () => ({action: 'created', path: 'Plaud/x.md'})
+    upsertNote: async () => ({action: 'created', path: 'Plaud/x.md'}),
+    fetchBinary: async () => new ArrayBuffer(0),
+    buildSignedUrlMap: () => [],
+    resolveImages: async (input) => ({markdown: input.markdown, downloaded: 0})
   });
 
   assert.equal(summary.created, 2);
   assert.equal(summary.skipped, 1);
   assert.equal(summary.failed, 0);
-  assert.deepEqual(checkpointCalls, []);
-  assert.equal(summary.lastSyncAtMsAfter, 100);
+  assert.deepEqual(checkpointCalls, [1700000400000]);
+  assert.equal(summary.lastSyncAtMsAfter, 1700000400000);
+});
+
+test('edit_time in seconds triggers re-sync for updated recordings', async () => {
+  const detailCalls = [];
+
+  const summary = await runPlaudSync({
+    api: {
+      async listFiles() {
+        return [
+          // start_time is old but edit_time (in seconds) is recent
+          {id: 'edited', start_time: 1700000000000, edit_time: 1700000500, is_trash: false},
+          {id: 'old', start_time: 1700000000000, edit_time: 1700000050, is_trash: false}
+        ];
+      },
+      async getFileDetail(id) {
+        detailCalls.push(id);
+        return {id, file_id: id, file_name: id, start_time: 1700000000000, duration: 60000};
+      }
+    },
+    vault: {},
+    settings: baseSettings({lastSyncAtMs: 1700000100000}),
+    saveCheckpoint: async () => {},
+    normalizeDetail: (raw) => ({
+      id: raw.id,
+      fileId: raw.file_id,
+      title: raw.file_name,
+      startAtMs: raw.start_time,
+      durationMs: raw.duration,
+      summary: '',
+      highlights: [],
+      transcript: '',
+      aiContentMarkdown: '## Content',
+      raw
+    }),
+    renderMarkdown: () => '---\nfile_id: x\n---',
+    upsertNote: async () => ({action: 'updated', path: 'Plaud/x.md'}),
+    fetchBinary: async () => new ArrayBuffer(0),
+    buildSignedUrlMap: () => [],
+    resolveImages: async (input) => ({markdown: input.markdown, downloaded: 0})
+  });
+
+  // edit_time 1700000500 * 1000 = 1700000500000 > checkpoint 1700000100000
+  // edit_time 1700000050 * 1000 = 1700000050000 < checkpoint 1700000100000
+  assert.deepEqual(detailCalls, ['edited']);
+  assert.equal(summary.selected, 1);
+  assert.equal(summary.updated, 1);
 });

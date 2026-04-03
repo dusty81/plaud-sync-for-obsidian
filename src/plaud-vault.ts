@@ -4,6 +4,7 @@ export interface PlaudVaultAdapter {
 	read(path: string): Promise<string>;
 	write(path: string, content: string): Promise<void>;
 	create(path: string, content: string): Promise<void>;
+	createBinary(path: string, data: ArrayBuffer): Promise<void>;
 }
 
 export interface BuildFilenameInput {

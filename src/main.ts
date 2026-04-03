@@ -1,4 +1,4 @@
-import {Notice, Plugin, requestUrl, TFile} from 'obsidian';
+import {Notice, Plugin, requestUrl, setIcon, TFile} from 'obsidian';
 import {registerPlaudCommands} from './commands';
 import {type PlaudPluginSettings, normalizeSettings, toPersistedSettings} from './settings-schema';
 import {PlaudSettingTab} from './settings';
@@ -12,6 +12,7 @@ import {type PlaudVaultAdapter, upsertPlaudNote} from './plaud-vault';
 import {PlaudApiError, type PlaudApiClient, type PlaudFileDetail} from './plaud-api';
 import {DEFAULT_RETRY_POLICY, sanitizeTelemetryMessage, type RetryTelemetryEvent, withRetry} from './plaud-retry';
 import {hydratePlaudDetailContent} from './plaud-content-hydrator';
+import {buildSignedUrlMap, resolveImages} from './plaud-image-resolver';
 
 function toErrorMessage(error: unknown): string {
 	if (error instanceof Error && error.message.trim().length > 0) {
@@ -50,6 +51,9 @@ function formatSyncSummary(summary: PlaudSyncSummary): string {
 export default class PlaudSyncPlugin extends Plugin {
 	settings: PlaudPluginSettings;
 	private syncRuntime: PlaudSyncRuntime | null = null;
+	private statusBarEl: HTMLElement | null = null;
+	private ribbonIconEl: HTMLElement | null = null;
+	private isSyncing = false;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -63,6 +67,13 @@ export default class PlaudSyncPlugin extends Plugin {
 
 		registerPlaudCommands(this);
 		this.addSettingTab(new PlaudSettingTab(this.app, this));
+
+		this.statusBarEl = this.addStatusBarItem();
+		this.updateStatusBar('Plaud: idle');
+
+		this.ribbonIconEl = this.addRibbonIcon('refresh-cw', 'Plaud sync', () => {
+			void this.runPlaudSyncNow();
+		});
 
 		void this.syncRuntime.runStartupSync();
 	}
@@ -101,6 +112,23 @@ export default class PlaudSyncPlugin extends Plugin {
 		}
 	}
 
+	private updateStatusBar(text: string): void {
+		if (this.statusBarEl) {
+			this.statusBarEl.setText(text);
+		}
+	}
+
+	private setSyncingState(syncing: boolean): void {
+		this.isSyncing = syncing;
+		if (this.ribbonIconEl) {
+			if (syncing) {
+				this.ribbonIconEl.addClass('plaud-sync-spinning');
+			} else {
+				this.ribbonIconEl.removeClass('plaud-sync-spinning');
+			}
+		}
+	}
+
 	private ensureSyncRuntime(): PlaudSyncRuntime {
 		if (!this.syncRuntime) {
 			this.syncRuntime = createPlaudSyncRuntime({
@@ -116,14 +144,20 @@ export default class PlaudSyncPlugin extends Plugin {
 	}
 
 	private async runSync(trigger: SyncTrigger): Promise<void> {
+		this.setSyncingState(true);
+		this.updateStatusBar('Plaud: syncing...');
 		try {
 			const summary = await this.executeSyncBatch();
+			this.updateStatusBar(`Plaud: ${summary.created} new, ${summary.updated} updated at ${new Date().toLocaleTimeString()}`);
 			if (trigger === 'manual') {
 				new Notice(formatSyncSummary(summary));
 			}
 		} catch (error) {
+			this.updateStatusBar('Plaud: sync failed');
 			this.logFailure('sync_failed', error);
 			new Notice(`Plaud sync failed: ${toActionableMessage(error)}`);
+		} finally {
+			this.setSyncingState(false);
 		}
 	}
 
@@ -169,7 +203,13 @@ export default class PlaudSyncPlugin extends Plugin {
 			},
 			normalizeDetail: normalizePlaudDetail,
 			renderMarkdown: renderPlaudMarkdown,
-			upsertNote: upsertPlaudNote
+			upsertNote: upsertPlaudNote,
+			fetchBinary: async (url) => this.fetchSignedBinary(url),
+			buildSignedUrlMap,
+			resolveImages,
+			onProgress: (progress) => {
+				this.updateStatusBar(`Plaud: syncing ${progress.current}/${progress.total}...`);
+			}
 		});
 	}
 
@@ -201,6 +241,20 @@ export default class PlaudSyncPlugin extends Plugin {
 			status: error instanceof PlaudApiError && typeof error.status === 'number' ? error.status : null,
 			message: sanitizeTelemetryMessage(toErrorMessage(error))
 		});
+	}
+
+	private async fetchSignedBinary(url: string): Promise<ArrayBuffer> {
+		const response = await requestUrl({
+			url,
+			method: 'GET',
+			throw: false
+		});
+
+		if (response.status >= 400) {
+			throw new Error(`Signed binary fetch failed with HTTP ${response.status}.`);
+		}
+
+		return response.arrayBuffer;
 	}
 
 	private async fetchSignedContent(url: string): Promise<unknown> {
@@ -264,6 +318,14 @@ export default class PlaudSyncPlugin extends Plugin {
 			},
 			create: async (path, content) => {
 				await this.app.vault.create(path, content);
+			},
+			createBinary: async (path, data) => {
+				const existing = this.app.vault.getAbstractFileByPath(path);
+				if (existing instanceof TFile) {
+					await this.app.vault.modifyBinary(existing, data);
+				} else {
+					await this.app.vault.createBinary(path, data);
+				}
 			}
 		};
 	}

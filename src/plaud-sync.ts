@@ -1,6 +1,7 @@
 import type {PlaudApiClient, PlaudFileSummary} from './plaud-api';
 import type {NormalizedPlaudDetail} from './plaud-normalizer';
 import type {PlaudVaultAdapter, UpsertPlaudNoteResult} from './plaud-vault';
+import type {ImageSignedUrl} from './plaud-image-resolver';
 
 export interface PlaudSyncSettings {
 	syncFolder: string;
@@ -13,6 +14,11 @@ export interface PlaudSyncSettings {
 export interface PlaudSyncFailure {
 	fileId: string;
 	message: string;
+}
+
+export interface PlaudSyncProgress {
+	current: number;
+	total: number;
 }
 
 export interface PlaudSyncSummary {
@@ -45,6 +51,16 @@ export interface RunPlaudSyncInput {
 		date: string;
 		markdown: string;
 	}) => Promise<UpsertPlaudNoteResult>;
+	fetchBinary: (url: string) => Promise<ArrayBuffer>;
+	buildSignedUrlMap: (rawDetail: unknown) => ImageSignedUrl[];
+	resolveImages: (input: {
+		vault: PlaudVaultAdapter;
+		syncFolder: string;
+		markdown: string;
+		imageUrls: ImageSignedUrl[];
+		fetchBinary: (url: string) => Promise<ArrayBuffer>;
+	}) => Promise<{markdown: string; downloaded: number}>;
+	onProgress?: (progress: PlaudSyncProgress) => void;
 }
 
 function normalizeTimestampMs(value: unknown): number {
@@ -97,6 +113,24 @@ export function isTrashedFile(summary: PlaudFileSummary): boolean {
 	return normalizeBoolean(summary.is_trash);
 }
 
+function toMs(value: unknown): number {
+	const n = normalizeTimestampMs(value);
+	if (n === 0) {
+		return 0;
+	}
+
+	// Values under 1e12 are in seconds (e.g. edit_time=1775233337), convert to ms
+	return n < 1e12 ? n * 1000 : n;
+}
+
+function latestTimestamp(summary: PlaudFileSummary): number {
+	return Math.max(
+		toMs(summary.start_time),
+		toMs(summary.edit_time),
+		toMs(summary.version_ms)
+	);
+}
+
 export function shouldSyncFile(summary: PlaudFileSummary, lastSyncAtMs: number): boolean {
 	if (isTrashedFile(summary)) {
 		return false;
@@ -107,29 +141,32 @@ export function shouldSyncFile(summary: PlaudFileSummary, lastSyncAtMs: number):
 		return true;
 	}
 
-	const startAtMs = normalizeTimestampMs(summary.start_time);
-	if (startAtMs === 0) {
+	const latest = latestTimestamp(summary);
+	if (latest === 0) {
 		return true;
 	}
 
-	return startAtMs > checkpoint;
+	return latest > checkpoint;
 }
 
 export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncSummary> {
 	const checkpointBefore = normalizeTimestampMs(input.settings.lastSyncAtMs);
 	const listed = await input.api.listFiles();
+
 	const selected = listed.filter((summary) => shouldSyncFile(summary, checkpointBefore));
 
 	let created = 0;
 	let updated = 0;
 	let skipped = 0;
 	let failed = 0;
-	let noAiContentSkipped = 0;
 	let checkpointCandidate = checkpointBefore;
 	const failures: PlaudSyncFailure[] = [];
 
+	let processed = 0;
 	for (const summary of selected) {
 		const fileId = resolveFileId(summary);
+		processed += 1;
+		input.onProgress?.({current: processed, total: selected.length});
 
 		try {
 			const detail = await input.api.getFileDetail(fileId);
@@ -137,11 +174,31 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 
 			if (!normalized.aiContentMarkdown) {
 				skipped += 1;
-				noAiContentSkipped += 1;
+				checkpointCandidate = Math.max(
+					checkpointCandidate,
+					latestTimestamp(summary),
+					normalizeTimestampMs(normalized.startAtMs)
+				);
 				continue;
 			}
 
-			const markdown = input.renderMarkdown(normalized);
+			let markdown = input.renderMarkdown(normalized);
+			const imageRefs = markdown.match(/!\[[^\]]*\]\([^)]+\.(?:png|jpg|jpeg|gif|webp|svg)[^)]*\)/gi) || [];
+			const imageUrls = input.buildSignedUrlMap(normalized.raw);
+			if (imageRefs.length > 0) {
+				console.info('[plaud-sync] image refs found:', imageRefs.length, 'signed URLs found:', imageUrls.length);
+			}
+			if (imageRefs.length > 0) {
+				const resolved = await input.resolveImages({
+					vault: input.vault,
+					syncFolder: input.settings.syncFolder,
+					markdown,
+					imageUrls,
+					fetchBinary: input.fetchBinary
+				});
+				markdown = resolved.markdown;
+			}
+
 			const upsertResult = await input.upsertNote({
 				vault: input.vault,
 				syncFolder: input.settings.syncFolder,
@@ -164,7 +221,7 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 
 			checkpointCandidate = Math.max(
 				checkpointCandidate,
-				normalizeTimestampMs(summary.start_time),
+				latestTimestamp(summary),
 				normalizeTimestampMs(normalized.startAtMs)
 			);
 		} catch (error) {
@@ -177,7 +234,7 @@ export async function runPlaudSync(input: RunPlaudSyncInput): Promise<PlaudSyncS
 	}
 
 	let checkpointAfter = checkpointBefore;
-	if (failed === 0 && noAiContentSkipped === 0 && checkpointCandidate > checkpointBefore) {
+	if (failed === 0 && checkpointCandidate > checkpointBefore) {
 		await input.saveCheckpoint(checkpointCandidate);
 		checkpointAfter = checkpointCandidate;
 	}

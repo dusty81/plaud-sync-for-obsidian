@@ -19,6 +19,9 @@ export interface PlaudFileSummary {
 	file_id?: string;
 	is_trash?: boolean;
 	start_time?: number;
+	edit_time?: number;
+	version_ms?: number;
+	[key: string]: unknown;
 }
 
 export interface PlaudFileDetail {

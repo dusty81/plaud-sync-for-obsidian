@@ -35,6 +35,9 @@ function createMockVault(initialFiles = {}) {
     async create(path, content) {
       creates.push(path);
       files.set(path, content);
+    },
+    async createBinary(path, data) {
+      files.set(path, data);
     }
   };
 }
