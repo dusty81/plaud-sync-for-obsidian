@@ -135,6 +135,35 @@ test('passthrough mode omits callout when transcript is empty', () => {
   assert.doesNotMatch(markdown, /\[!note\]- Transcript/);
 });
 
+test('passthrough mode adds blank lines around tables for Obsidian rendering', () => {
+  const markdown = renderPlaudMarkdown({
+    ...samplePassthroughDetail,
+    aiContentMarkdown: '🎯 **Action Items**\n| Task | Owner |\n| --- | --- |\n| Write spec | Alice |\n⚖️ **Decisions**'
+  });
+
+  const lines = markdown.split('\n');
+  const tableStart = lines.findIndex((l) => l.startsWith('| Task'));
+  const tableEnd = lines.findIndex((l) => l.startsWith('| Write'));
+
+  // Blank line before table header
+  assert.equal(lines[tableStart - 1], '');
+  // Blank line after last table row
+  assert.equal(lines[tableEnd + 1], '');
+});
+
+test('extracts pseudo-headers from table rows with empty cells', () => {
+  const markdown = renderPlaudMarkdown({
+    ...samplePassthroughDetail,
+    aiContentMarkdown: '🎯 **Action Items**\n| Task | Owner |\n| --- | --- |\n| Write spec | Alice |\n| ⚖️ **Decisions Made** |  |  |  |\n- We decided X'
+  });
+
+  // The pseudo-header row should be extracted as plain text, not a table row
+  assert.ok(markdown.includes('⚖️ **Decisions Made**'));
+  assert.ok(!markdown.includes('| ⚖️ **Decisions Made**'));
+  // The actual table should still be there
+  assert.ok(markdown.includes('| Write spec | Alice |'));
+});
+
 test('falls back to old template when aiContentMarkdown is empty', () => {
   const markdown = renderPlaudMarkdown({
     ...sampleDetail,
